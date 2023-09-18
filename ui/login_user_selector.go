@@ -8,7 +8,7 @@ import (
 	"github.com/jroimartin/gocui"
 )
 
-type loginUser struct {
+type LoginUser struct {
 	list          []string
 	width, height int
 	g             *gocui.Gui
@@ -22,7 +22,7 @@ type loginUser struct {
 }
 
 // NewLoginUser create a new login user UI
-func NewLoginUser(listUser []string) (*loginUser, error) {
+func NewLoginUser(listUser []string) (*LoginUser, error) {
 	g, err := gocui.NewGui(gocui.OutputNormal)
 	if err != nil {
 		return nil, err
@@ -30,8 +30,9 @@ func NewLoginUser(listUser []string) (*loginUser, error) {
 	g.Highlight = true
 	g.Cursor = false
 	g.SelFgColor = gocui.ColorGreen
+	listUser = reverse(listUser)
 
-	l := &loginUser{
+	l := &LoginUser{
 		list:     listUser,
 		g:        g,
 		viewName: "login_user_selector",
@@ -48,7 +49,7 @@ func NewLoginUser(listUser []string) (*loginUser, error) {
 }
 
 // getY return the initial start & end Y
-func (l *loginUser) getY() (yStart int, yEnd int) {
+func (l *LoginUser) getY() (yStart int, yEnd int) {
 	textHeight := len(strings.Split(l.text(0), "\n"))
 	paddingPercentage := (1 - float64(textHeight)/float64(l.height)) / 2
 	yStart = int(float64(l.height)*paddingPercentage) - 1
@@ -57,7 +58,7 @@ func (l *loginUser) getY() (yStart int, yEnd int) {
 }
 
 // getX returns the initial start & end X
-func (l *loginUser) getX() (xStart, xEnd int) {
+func (l *LoginUser) getX() (xStart, xEnd int) {
 	xMax := 0
 	for _, s := range l.list {
 		if len(s) > xMax {
@@ -79,7 +80,7 @@ func (l *loginUser) getX() (xStart, xEnd int) {
 }
 
 // registerView delete all previous view & keybinding
-func (l *loginUser) registerView() error {
+func (l *LoginUser) registerView() error {
 
 	yStart, yEnd := l.getY()
 	xStart, xEnd := l.getX()
@@ -100,12 +101,20 @@ func (l *loginUser) registerView() error {
 	return nil
 }
 
-func (l *loginUser) registerKeyBind() error {
+func (l *LoginUser) registerKeyBind() error {
 	if err := l.g.SetKeybinding(l.viewName, gocui.KeyCtrlC, gocui.ModNone, quit); err != nil {
 		return err
 	}
 
 	if err := l.g.SetKeybinding(l.viewName, gocui.KeyEnter, gocui.ModNone, l.handleEnter); err != nil {
+		return err
+	}
+
+	if err := l.g.SetKeybinding(l.viewName, gocui.KeyTab, gocui.ModNone, l.handleNav(func() {
+		if l.pos < len(l.list)-1 {
+			l.pos++
+		}
+	})); err != nil {
 		return err
 	}
 
@@ -127,7 +136,7 @@ func (l *loginUser) registerKeyBind() error {
 }
 
 // handleNav handle navigation arrow DOWN and UP
-func (l *loginUser) handleNav(c func()) func(g *gocui.Gui, v *gocui.View) error {
+func (l *LoginUser) handleNav(c func()) func(g *gocui.Gui, v *gocui.View) error {
 	return func(g *gocui.Gui, v *gocui.View) error {
 		c()
 		return l.write(v)
@@ -135,14 +144,14 @@ func (l *loginUser) handleNav(c func()) func(g *gocui.Gui, v *gocui.View) error 
 }
 
 // write writes the text into view
-func (l *loginUser) write(v *gocui.View) error {
+func (l *LoginUser) write(v *gocui.View) error {
 	v.Clear()
 	_, err := v.Write([]byte(l.text(l.pos)))
 	return err
 }
 
 // text return the text to be shown in the UI
-func (l *loginUser) text(pos int) string {
+func (l *LoginUser) text(pos int) string {
 	var str bytes.Buffer
 	str.WriteString("\n")
 	str.WriteString("Select user to login")
@@ -168,17 +177,31 @@ func prependTab(text string) (res string) {
 
 // handleEnter get the current list position then set to selected user
 // then exit the UI
-func (l *loginUser) handleEnter(g *gocui.Gui, v *gocui.View) error {
+func (l *LoginUser) handleEnter(_ *gocui.Gui, _ *gocui.View) error {
 	l.selectedUser = l.list[l.pos]
 	return gocui.ErrQuit
 }
 
 // Run runs the UI and returns the selected user login
-func (l *loginUser) Run() (string, error) {
+func (l *LoginUser) Run() (string, error) {
 	defer l.g.Close()
 	err := l.g.MainLoop()
 	if err == gocui.ErrQuit {
 		return l.selectedUser, nil
 	}
 	return l.selectedUser, err
+}
+
+// reverse will reverse the slice input to it (e.g. user list)
+// @irf needs this since root is always on top
+func reverse(s []string) []string {
+	a := make([]string, len(s))
+	copy(a, s)
+
+	for i := len(a)/2 - 1; i >= 0; i-- {
+		opp := len(a) - 1 - i
+		a[i], a[opp] = a[opp], a[i]
+	}
+
+	return a
 }
